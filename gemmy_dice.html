@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini RPS Resolution Arena</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            max-width: 650px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h2 {
+            color: #ffffff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #b0b0b0;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 1rem;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        button.choice-btn, button.action-btn {
+            background-color: #2a2a2a;
+            color: white;
+            border: 1px solid #444;
+            padding: 12px 18px;
+            font-size: 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button.choice-btn:hover, button.action-btn:hover {
+            background-color: #3a3a3a;
+        }
+        button.send-btn {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+        }
+        button.send-btn:hover {
+            background-color: #357abd;
+        }
+        .display-box {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px;
+            min-height: 80px;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .response-container {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px;
+            min-height: 120px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Gemini RPS Resolution Arena</h2>
+
+    <div class="section">
+        <label for="apiKey">Gemini API Key:</label>
+        <input type="password" id="apiKey" placeholder="Enter your API token here">
+    </div>
+
+    <div class="section">
+        <label>Construct Your 3-Choice Set (Max 3):</label>
+        <div class="controls">
+            <button class="choice-btn" onclick="addChoice('✊')">✊</button>
+            <button class="choice-btn" onclick="addChoice('✋')">✋</button>
+            <button class="choice-btn" onclick="addChoice('✌️')">✌️</button>
+            <button class="action-btn" onclick="backspaceChoice()" style="font-size: 1rem;">⌫ Backspace</button>
+            <button class="action-btn" onclick="clearDisplay()" style="font-size: 1rem;">Clear</button>
+        </div>
+        <div id="playerDisplay" class="display-box">_ _ _</div>
+    </div>
+
+    <button id="sendBtn" class="send-btn" onclick="runResolutionWorkflow()">Send & Resolve Match</button>
+
+    <div class="section" style="margin-top: 25px;">
+        <label>Resolution Print &amp; Telemetry Output:</label>
+        <div id="responseBox" class="response-container">Awaiting input set...</div>
+    </div>
+
+    <script>
+        let playerChoices = [];
+
+        function addChoice(emoji) {
+            if (playerChoices.length < 3) {
+                playerChoices.push(emoji);
+                updateDisplay();
+            }
+        }
+
+        function backspaceChoice() {
+            playerChoices.pop();
+            updateDisplay();
+        }
+
+        function clearDisplay() {
+            playerChoices = [];
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const displayBox = document.getElementById('playerDisplay');
+            if (playerChoices.length === 0) {
+                displayBox.textContent = '_ _ _';
+            } else {
+                displayBox.textContent = playerChoices.join(' ');
+            }
+        }
+
+        function rollDice(count) {
+            let rolls = [];
+            for (let i = 0; i < count; i++) {
+                rolls.push(Math.floor(Math.random() * 6) + 1);
+            }
+            return rolls;
+        }
+
+        // Maps an array of elements using a set of 3 dice rolls to determine index permutation
+        function shuffleByDice(arr, diceRolls) {
+            // Pair indices with dice values, sort by dice value to generate a deterministic permutation
+            let indexed = arr.map((item, index) => ({ item, roll: diceRolls[index] || 1 }));
+            indexed.sort((a, b) => a.roll - b.roll);
+            return {
+                ordered: indexed.map(x => x.item),
+                rollsUsed: diceRolls
+            };
+        }
+
+        function evaluateRPS(p1, p2) {
+            if (p1 === p2) return 'Tie';
+            if (
+                (p1 === '✊' && p2 === '✌️') ||
+                (p1 === '✋' && p2 === '✊') ||
+                (p1 === '✌️' && p2 === '✋')
+            ) {
+                return 'Player Wins';
+            }
+            return 'Algorithm Wins';
+        }
+
+        async function runResolutionWorkflow() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const responseBox = document.getElementById('responseBox');
+
+            if (!apiKey) {
+                responseBox.textContent = 'Error: Please enter your Gemini API key.';
+                return;
+            }
+            if (playerChoices.length !== 3) {
+                responseBox.textContent = 'Error: Please select exactly 3 choices using the emoji buttons.';
+                return;
+            }
+
+            responseBox.textContent = 'Contacting Gemini algorithm and rolling validation dice...';
+
+            // 1. Construct prompt commanding Gemini to output precisely 3 RPS emojis
+            const prompt = `Provide exactly three Rock-Paper-Scissors symbols chosen from ✊, ✋, or ✌️. Return only the three emojis separated by spaces, with no extra punctuation or commentary.`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const apiResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'Application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await apiResponse.json();
+                if (!apiResponse.ok) {
+                    throw new Error(data.error?.message || 'API request failed');
+                }
+
+                const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                
+                // Extract algorithm emojis from response
+                const algoMatches = rawText.match(/[✊✋✌️]/g);
+                if (!algoMatches || algoMatches.length < 3) {
+                    throw new Error(`Algorithm failed to return 3 valid symbols. Response was: "${rawText}"`);
+                }
+                const rawAlgoChoices = algoMatches.slice(0, 3);
+
+                // 2. Perform 6 total dice rolls (3 for player permutation, 3 for algorithm permutation)
+                const allDice = rollDice(6);
+                const playerDice = allDice.slice(0, 3);
+                const algoDice = allDice.slice(3, 6);
+
+                const playerPerm = shuffleByDice(playerChoices, playerDice);
+                const algoPerm = shuffleByDice(rawAlgoChoices, algoDice);
+
+                // 3. Pair off and score
+                let resultsSummary = [];
+                let playerScoreCount = 0;
+                let algoScoreCount = 0;
+
+                for (let i = 0; i < 3; i++) {
+                    const pMove = playerPerm.ordered[i];
+                    const aMove = algoPerm.ordered[i];
+                    const outcome = evaluateRPS(pMove, aMove);
+                    
+                    if (outcome === 'Player Wins') playerScoreCount++;
+                    if (outcome === 'Algorithm Wins') algoScoreCount++;
+
+                    resultsSummary.push(`Pair ${i + 1}: Player (${pMove}) vs Algorithm (${aMove}) -> ${outcome}`);
+                }
+
+                let finalWinner = playerScoreCount > algoScoreCount ? 'Player Dominates' : (algoScoreCount > playerScoreCount ? 'Algorithm Dominates' : 'Stalemate Quorum');
+
+                // Print comprehensive report
+                responseBox.innerHTML = `<strong>--- PROMPT PRINT & RESOLUTION REPORT ---</strong><br>` +
+                    `Raw Algorithm Response: ${rawText.trim()}<br><br>` +
+                    `<strong>Dice Telemetry (6 Rolls):</strong><br>` +
+                    `- Player Shuffle Rolls: [${playerDice.join(', ')}] -> Ordered Set: ${playerPerm.ordered.join(' ')}<br>` +
+                    `- Algorithm Shuffle Rolls: [${algoDice.join(', ')}] -> Ordered Set: ${algoPerm.ordered.join(' ')}<br><br>` +
+                    `<strong>Pairwise Matchups:</strong><br>` +
+                    resultsSummary.join('<br>') + `<br><br>` +
+                    `<strong>Final Verdict:</strong> ${finalWinner} (${playerScoreCount} to ${algoScoreCount})`;
+
+            } catch (error) {
+                responseBox.textContent = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
